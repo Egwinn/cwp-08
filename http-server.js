@@ -3,8 +3,60 @@ const net = require('net');
 const hostname = '127.0.0.1';
 const port = 3000;
 const tcp_port = 8124;
+const separator = "|||||";
 const tcpConnection = new net.Socket();
 tcpConnection.setEncoding('utf-8');
+
+const workers = {
+    "getWorkers": function (req, res, payload, cb) {
+        tcpConnection.write("getWorkers");
+        tcpConnection.on('data', (data, error) => {
+            if (!error) {
+                if (data.toString().split(separator)[0] === "getWorkers") {
+                    cb(null, JSON.parse(data.toString().split(separator)[1]));
+                }
+            }
+            else console.error(error);
+        });
+    },
+
+    "add": function (req, res, payload, cb) {
+        if (payload.x !== undefined) {
+            tcpConnection.write(`add${separator}${payload.x}`);
+            tcpConnection.on('data', (data, error) => {
+                if (!error) {
+                    if (data.toString().split(separator)[0] === "add") {
+                        cb(null, {
+                            pid: data.toString().split(separator)[1],
+                            startedOn: data.toString().split(separator)[2],
+                        });
+                    }
+                }
+                else console.error(error);
+            });
+        }
+        else cb({code: 405, message: 'Worker not found'});
+    },
+
+    "remove": function (req, res, payload, cb) {
+        if (payload.id !== undefined) {
+            tcpConnection.write(`remove${separator}${payload.id}`);
+            tcpConnection.on('data', (data, error) => {
+                if (!error) {
+                    if (data.toString().split(separator)[0] === "remove") {
+                        cb(null, {
+                            pid: data.toString().split(separator)[1],
+                            startedOn: data.toString().split(separator)[2],
+                            numbers: data.toString().split(separator)[3],
+                        });
+                    }
+                }
+                else console.error(error);
+            });
+        }
+        else cb({code: 405, message: 'Worker not found'});
+    },
+};
 
 const handlers = {
     '/workers': workers.getWorkers,
@@ -12,9 +64,9 @@ const handlers = {
     '/workers/remove': workers.remove
 };
 
-tcpConnection.connect(tcp_port, '127.0.0.1',  (err) => {
+tcpConnection.connect(tcp_port, hostname,  (err) => {
     if (err) console.error("Connection not established");
-    else console.log('Connected to the TCP server')
+    else console.log('Connected to the TCP server')   
 });
 
 const server = http.createServer((req, res) => {
@@ -36,6 +88,7 @@ server.listen(port, hostname, () => {
     console.log(`Server running at http://${hostname}:${port}/`);
 });
 
+
 function getHandler(url) {
     return handlers[url] || notFound;
 }
@@ -50,8 +103,6 @@ function parseBodyJson(req, cb) {
         body.push(chunk);
     }).on('end', function () {
         body = Buffer.concat(body).toString();
-        extras.logRequest(req.url, body, new Date().toISOString());
-        console.log("body : " +body);
         if (body !== "") {
             params = JSON.parse(body);
             cb(null, params);
